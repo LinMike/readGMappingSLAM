@@ -8,7 +8,7 @@
 
 #define LASER_MAXBEAMS 2048
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * ScanMatcher，扫描匹配类
@@ -86,7 +86,7 @@ namespace Gmapping {
     protected:
         bool m_activeAreaComputed;
         unsigned int m_laserBeams;
-        double m_laserAngles;
+        double *m_laserAngles;
 
         PARAM_SET_GET(OrientedPoint, laserPose, protected, public, public)
         PARAM_SET_GET(double, laserMaxRange, protected, public, public)
@@ -108,7 +108,7 @@ namespace Gmapping {
         PARAM_SET_GET(double, angularOdometryReliability, protected, public, public)
         PARAM_SET_GET(double, linearOdometryReliability, protected, public, public)
         PARAM_SET_GET(double, freeCellRatio, protected, public, public)
-        PARAM_SET_GET(unsigned int, initialBeamsSkip, protected, public, public)
+        PARAM_SET_GET(unsigned int, initialBeamSkip, protected, public, public)
     };
 
     /**
@@ -143,7 +143,7 @@ namespace Gmapping {
             skip++;
             // 每隔 m_likelihoodSkip 个激光束就跳过一个激光束
             // 或激光束超过观测时的最大测距值Zmax时，则跳过该激光束
-            skip = skip > m_likehoodSkip?0:skip;
+            skip = skip > m_likelihoodSkip?0:skip;
             if ( skip || *r > m_usableRange || *r == 0.0 ) 
                 continue;
                 
@@ -203,7 +203,7 @@ namespace Gmapping {
      * p，当前t时刻估计的机器人位姿（世界坐标系）
      * readings，存储激光雷达读数的数组（观测值，一帧激光数据）
      */
-    inline unsigned int likelihoodAndScore( double& s, double& l, 
+    inline unsigned int ScanMatcher::likelihoodAndScore( double& s, double& l, 
         const ScanMatcherMap& map, const OrientedPoint& p, const double* readings ) const 
     {
         // 初始化s，l
@@ -227,7 +227,7 @@ namespace Gmapping {
         // 初始化地图中占用和空闲的阈值，并缩放到世界坐标系中
         double freeDleta = map.getDelta() * m_freeCellRatio;
         // 遍历一帧激光数据中的所有激光束（跳过了开始的m_initialBeamSkip个激光束）
-        for ( const double* r = readings + m_initialBeamSkip; r<readings+m_laserBeams; r++; angle++ ) {
+        for ( const double* r = readings + m_initialBeamSkip; r<readings+m_laserBeams; r++, angle++ ) {
             skip++;
             // 每隔 m_likelihoodSkip 个激光束就跳过一个激光束
             // 或激光束超过观测时的最大测距值Zmax时，则跳过该激光束
@@ -257,10 +257,10 @@ namespace Gmapping {
                 for (int yy=-m_kernelSize; yy<=m_kernelSize; yy++) {
                     // 击中点（观测值）和空闲点各自偏移(xx, yy)
                     IntPoint pr = iphit + IntPoint(xx, yy);
-                    intPoint pf = pr + ipfree;
+                    IntPoint pf = pr + ipfree;
                     // 得到各自对应的Cell
                     const PointAccumulator& cell = map.cell(pr);
-                    const PointAccumulator& cell = map.cell(pr);
+                    const PointAccumulator& fcell = map.cell(pf);
                     // PointAccumulator类中运算符 double 重载
                     // 即(double)cell返回的是该cell被占用的概率
                     if ( ( (double)cell )>m_fullnessThreshold && ( (double)fcell )<m_fullnessThreshold ) {

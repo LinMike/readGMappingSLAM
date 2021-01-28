@@ -4,7 +4,7 @@
 #include "sensor.h"
 #include "utils/point.h"
 
-namespace Gmapping {
+namespace GMapping {
     
     /**
      * RangeSensor，激光传感器类，继承自传感器基类
@@ -36,7 +36,7 @@ namespace Gmapping {
     
         inline OrientedPoint getPose() const { return m_pose; }
         inline const std::vector<Beam>& beams() const { return m_beams; }
-        inline std::vector<Beam>& beams() const { return m_beams; }
+        // inline std::vector<Beam>& beams() const { return m_beams; }
         void updateBeamsLookup();
     protected:
         OrientedPoint m_pose;

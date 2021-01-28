@@ -3,7 +3,7 @@
 #include <string>
 #include <map>
 
-namespace Gmapping {
+namespace GMapping {
     
     /**
      * Sensor，传感器基类，包括里程计，激光雷达等传感器都可由此基类派生

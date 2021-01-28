@@ -1,6 +1,9 @@
 #include "motionmodel/motionmodel.h"
 
-namespace Gmapping {
+#define MotionModelConditioningLinearCovariance 0.01
+#define MotionModelConditioningAngularCovariance 0.001
+
+namespace GMapping {
 
     /**
      * 里程计运动模型采样函数，参考 《Probabilistic Robotics》 5.4.2节
@@ -41,6 +44,7 @@ namespace Gmapping {
 
         double lm=linearMove  + fabs( linearMove ) * sampleGaussian( srr ) + fabs( angularMove ) * sampleGaussian( str );
         double am=angularMove + fabs( linearMove ) * sampleGaussian( srt ) + fabs( angularMove ) * sampleGaussian( stt );
+        OrientedPoint n(p);
         n.x+=lm*cos(n.theta+.5*am);
         n.y+=lm*sin(n.theta+.5*am);
         n.theta+=am;
@@ -49,7 +53,7 @@ namespace Gmapping {
 
     }
 
-    Covariance3 gaussianApproximation(const OrientedPoint& pnew, const OrientedPoint& pold) const {
+    Covariance3 MotionModel::gaussianApproximation(const OrientedPoint& pnew, const OrientedPoint& pold) const {
         OrientedPoint delta=absoluteDifference(pnew,pold);
         
         /*两个位置的线性位移和角度位移*/

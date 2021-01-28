@@ -6,7 +6,7 @@
 
 #define SIGHT_INC 1
 
-namespace Gmapping {
+namespace GMapping {
     /**
      * PointAccumulator，表示地图ScanMatcherMap的单元（栅格）数据类型
      * 即Map类中的Cell，表示地图中的一个cell
@@ -50,13 +50,13 @@ namespace Gmapping {
      * value，表示是否被击中
      * p，表示被击中的坐标（世界坐标系）
      */
-    void PointAccumulator::update( bool value, const Point& p=Point(0,0) ) {
+    void PointAccumulator::update( bool value, const Point& p ) {
         if ( value ) {
             acc.x += static_cast<float>(p.x);
             acc.y += static_cast<float>(p.y);
             n++;
             visits += SIGHT_INC;
-        } esle {
+        } else {
             visits ++;
         }
     }
@@ -65,7 +65,7 @@ namespace Gmapping {
      * 求熵运算
      * 先以计数总量n除以访问量visits，然后以二值分布的形式计算熵
      */
-    double PointAccumulator::entropy() {
+    double PointAccumulator::entropy() const {
         // 从未被访问过
         if ( !visits ) {
             return -log(.5);

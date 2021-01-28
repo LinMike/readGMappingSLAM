@@ -4,7 +4,7 @@
 #include "odometrysensor.h"
 #include "utils/point.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * OdometryReading，里程计数据读取类，继承自传感器数据读取基类

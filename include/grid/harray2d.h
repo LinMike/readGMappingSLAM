@@ -5,7 +5,7 @@
 #include "utils/autoptr.h"
 #include "utils/point.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * HierarchicalArray2D，地图金字塔类，继承自二维数组Array2D类
@@ -51,8 +51,8 @@ namespace Gmapping {
         inline int getPatchSize() const { return m_patchMagnitude; }
         inline int getPatchMagnitude() const { return m_patchMagnitude; }
               
-        inline patchIndexes( int x, int y ) const;
-        inline patchIndexes( const IntPoint& p ) const { return patchIndexes(p.x, p.y); }
+        inline IntPoint patchIndexes( int x, int y ) const;
+        inline IntPoint patchIndexes( const IntPoint& p ) const { return patchIndexes(p.x, p.y); }
 
         inline bool isAllocated( int x, int y ) const;
         inline bool isAllocated( const IntPoint& p ) const { return isAllocated(p.x, p.y); }
@@ -66,7 +66,7 @@ namespace Gmapping {
         inline Cell& cell( const IntPoint& p ) { return cell(p.x, p.y); }
 
         inline void setActiveArea( const PointSet&, bool patchCoords=false );
-        const PointSets& getActiveArea() const { return m_activeArea; }
+        const PointSet& getActiveArea() const { return m_activeArea; }
         inline void allocActiveArea();
         
     protected:
@@ -123,13 +123,13 @@ namespace Gmapping {
      * 如果复制的两个地图的大小不一样 则需要把目前的地图删除，然后重新复制为新的地图
      */ 
     template< class Cell >
-    HierarchicalArray2D& HierarchicalArray2D<Cell>::operator = ( const HierarchicalArray2D& hg ) {
+    HierarchicalArray2D<Cell>& HierarchicalArray2D<Cell>::operator = ( const HierarchicalArray2D& hg ) {
         // 删除当前地图，并且重新分配内存
         if ( this->m_xsize!=hg.m_xsize || this->m_ysize!=hg.m_ysize  ) {
             for ( int i=0; i<this->m_xsize; i++ ) {
                 delete [] this->m_cells[i];
             }
-            delete [] this->m_celss;
+            delete [] this->m_cells;
 
             this->m_xsize = hg.m_xsize;
             this->m_ysize = hg.m_ysize;
@@ -193,7 +193,7 @@ namespace Gmapping {
      * 相当于原始坐标/m_patchMagnitude
      */
     template< class Cell >
-    inline HierarchicalArray2D<Cell>::patchIndexes( int x, int y ) const {
+    inline IntPoint HierarchicalArray2D<Cell>::patchIndexes( int x, int y ) const {
         if ( x>=0 && y>=0 )
             return IntPoint( x>>m_patchMagnitude, y>>m_patchMagnitude);
         return IntPoint(-1, -1);
@@ -226,7 +226,8 @@ namespace Gmapping {
      * 获取给定xy坐标处Cell的状态
      * 要访问某个具体的cell，首先转换到patch坐标系，再从对应的patch中访问对应的cell元素
      */ 
-    inline AccessibilityState cellState( int x, int y ) const {
+    template <class Cell>
+    inline AccessibilityState HierarchicalArray2D<Cell>::cellState( int x, int y ) const {
         if ( this->isInside( patchIndexes(x, y) ) ) {
             if ( isAllocated(x, y) )
                 return (AccessibilityState)((int)Inside|(int)Allocated);
@@ -261,7 +262,7 @@ namespace Gmapping {
             Array2D<Cell>* patch = createPatch(IntPoint(x, y));
             this->m_cells[c.x][c.y] = autoptr< Array2D<Cell> >(patch);
         }
-        autoptr< Array2D<Cell> >& ptr = this->m_cells[c.x][c.y]
+        autoptr< Array2D<Cell> >& ptr = this->m_cells[c.x][c.y];
         return (*ptr).cell(IntPoint(x-(c.x<<m_patchMagnitude),y-(c.y<<m_patchMagnitude)));
     }    
 

@@ -2,7 +2,7 @@
 #define ODOMETRYSENSOR_H
 #include "sensor.h"
 
-namespace Gmapping {
+namespace GMapping {
     
     /**
      * OdometrySensor，里程计类，继承自传感器基类

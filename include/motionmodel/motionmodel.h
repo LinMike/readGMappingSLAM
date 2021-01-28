@@ -1,9 +1,9 @@
 #ifndef MOTIONMODEL_H
 #define MOTIONMODEL_H
-#include "utils/point.h"、
+#include "utils/point.h"
 #include "utils/stat.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * MotionModel，里程计运动模型类，主要是运动模型的更新和采样

@@ -1,7 +1,9 @@
 #include <assert.h>
+#include <limits>
+#include <sys/types.h>
 #include "sensor/rangereading.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     RangeReading::RangeReading( const RangeSensor* rs, double time ): SensorReading( rs, time ) {
     }

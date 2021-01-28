@@ -7,6 +7,7 @@
 #include "utils/stat.h"
 #include "gridfastslam/gridslamprocessor.h"
 
+namespace GMapping {
 /**
  * 构造函数
  * TNode，树的结点 结构体，一个树储存了一整条轨迹，一个节点表示这条轨迹中的其中一个点
@@ -27,6 +28,7 @@ GridSlamProcessor::TNode::TNode(const OrientedPoint& p, double w, TNode* n, unsi
 
     flag=0;
 	accWeight=0;
+    visitCounter=0;
 }
 
 /**
@@ -72,7 +74,7 @@ GridSlamProcessor::TNodeVector GridSlamProcessor::getTrajectories() const
 		assert(newnode->childs==0);
         if (newnode->parent)
         {
-			parentCache.insert(make_pair(newnode->parent, newnode));
+			parentCache.insert(std::make_pair(newnode->parent, newnode));
 			//cerr << __PRETTY_FUNCTION__ << ": node " << newnode->parent << " flag=" << newnode->parent->flag<< endl;
             if (! newnode->parent->flag)
             {
@@ -99,7 +101,7 @@ GridSlamProcessor::TNodeVector GridSlamProcessor::getTrajectories() const
 		node->flag=false;
 		
 		//update the parent of all of the referring childs 
-		pair<TNodeMultimap::iterator, TNodeMultimap::iterator> p=parentCache.equal_range(node);
+		std::pair<TNodeMultimap::iterator, TNodeMultimap::iterator> p=parentCache.equal_range(node);
 		double childs=0;
         for (TNodeMultimap::iterator it=p.first; it!=p.second; it++)
         {
@@ -116,7 +118,7 @@ GridSlamProcessor::TNodeVector GridSlamProcessor::getTrajectories() const
 		//unmark the node
         if ( node->parent )
         {
-			parentCache.insert(make_pair(node->parent, newnode));
+			parentCache.insert(std::make_pair(node->parent, newnode));
             if(! node->parent->flag)
             {
 				border.push_back(node->parent);
@@ -163,7 +165,7 @@ void GridSlamProcessor::integrateScanSequence(GridSlamProcessor::TNode* node)
 	
 	//attach the path to each particle and compute the map;
 	if (m_infoStream )
-		m_infoStream << "Restoring State Nodes=" <<count << endl;
+		m_infoStream << "Restoring State Nodes=" <<count << std::endl;
 		
 		
 	aux=reversed;
@@ -302,19 +304,19 @@ double GridSlamProcessor::propagateWeights() {
         n->accWeight = weight;
         // propagateWeight()通过递归方法求解了一条路径树上根节点的累计权重accWeight
         // lastNodeWeight则是求所有根节点的累计权重之和
-        lastNodeWeight += propagateWeight(n->parent, n->accWeight)
+        lastNodeWeight += propagateWeight(n->parent, n->accWeight);
 
         w++;
     }
     if (fabs(aw-1.0) > 0.0001 || fabs(lastNodeWeight-1.0) > 0.0001)
     {
-	  cerr << "ERROR: ";
-	  cerr << "root->accWeight=" << lastNodeWeight << "    sum_leaf_weights=" << aw << endl;
+	  std::cerr << "ERROR: ";
+	  std::cerr << "root->accWeight=" << lastNodeWeight << "    sum_leaf_weights=" << aw << std::endl;
 	  assert(0);         
 	}
 	return lastNodeWeight;
 }
 
-
+}
 
 

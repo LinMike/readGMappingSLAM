@@ -254,6 +254,6 @@ typedef point<int> IntPoint;
 typedef point<double> Point;
 typedef orientedpoint<double, double> OrientedPoint;
 
-}; //end namespace
+} //end namespace
 
 #endif

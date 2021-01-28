@@ -10,7 +10,7 @@
 #define __FUNCDNAME__
 #endif
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * Array2D，二维数组类，用作栅格地图存储类型HierarchicalArray2D的基类
@@ -46,7 +46,7 @@ namespace Gmapping {
         Cell** m_cells;
 
         Array2D( int xsize=0, int ysize=0 );
-        Array2D( const Array2D<Cell, debug>& )
+        Array2D( const Array2D<Cell, debug>& );
         ~Array2D();
 
         Array2D& operator=( const Array2D& );
@@ -77,22 +77,26 @@ namespace Gmapping {
      * 构造函数，给二维数组（m_cells）分配存储空间
      */
     template< class Cell, const bool debug >
-    Array2D<Cell, debug>::Array2D( int xsize, int ysize ) {
+    Array2D<Cell, debug>::Array2D( int xsize, int ysize ) 
+    {
         m_xsize = xsize;
         m_ysize = ysize;
-        if ( m_xsize>0 && m_ysize>0 ) {
+        if ( m_xsize>0 && m_ysize>0 ) 
+        {
             m_cells = new Cell*[m_xsize];
             for (int i=0; i<m_xsize; i++) {
                 m_cells[i] = new Cell[m_ysize];
-            } else {
-                m_xsize = m_ysize = 0;
-                m_cells = 0;
             }
-            if (debug) {
-                std::cerr << __PRETTY_FUNCTION__ << std::endl;
-                std::cerr << "m_xsize= " << m_xsize<< std::endl;
-                std::cerr << "m_ysize= " << m_ysize<< std::endl;
-            }
+        } 
+        else 
+        {
+            m_xsize = m_ysize = 0;
+            m_cells = 0;
+        }
+        if (debug) {
+            std::cerr << __PRETTY_FUNCTION__ << std::endl;
+            std::cerr << "m_xsize= " << m_xsize<< std::endl;
+            std::cerr << "m_ysize= " << m_ysize<< std::endl;
         }
     }
 
@@ -129,7 +133,7 @@ namespace Gmapping {
         }
         for ( int i=0; i<m_xsize; i++ ) {
             delete [] m_cells[i];
-            m_cells[i] = 0
+            m_cells[i] = 0;
         }
         delete [] m_cells;
         m_cells = 0;
@@ -173,7 +177,7 @@ namespace Gmapping {
         }
         for ( int i=0; i<m_xsize; i++ ) {
             delete [] m_cells[i];
-            m_cells[i] = 0
+            m_cells[i] = 0;
         }
         delete [] m_cells;
         m_cells = 0;
@@ -201,7 +205,7 @@ namespace Gmapping {
             for ( int y=dy; y<Dy; y++ ) {
                 newcells[x-xmin][y-ymin] = this->m_cells[x][y];
             }
-            delete [] this->m_cells[x]
+            delete [] this->m_cells[x];
         }
         delete [] this->m_cells;
         this->m_cells = newcells;

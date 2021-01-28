@@ -1,6 +1,6 @@
 #include "sensor/odometryreading.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     OdometryReading::OdometryReading( const OdometrySensor* odo, double time ): SensorReading( odo, time ){
     }

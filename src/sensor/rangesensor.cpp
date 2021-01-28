@@ -1,6 +1,6 @@
 #include "sensor/rangesensor.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     RangeSensor::RangeSensor( std::string name ): Sensor( name ) {
     }
@@ -32,7 +32,7 @@ namespace Gmapping {
      * angles，存储有激光角度的数组
      */
     RangeSensor::RangeSensor( std::string name, unsigned int beams_num, double *angles, const OrientedPoint& position, 
-        double span=0, double maxrange ): Sensor(name), m_pose(position), m_beams(beams_num) 
+        double span, double maxrange ): Sensor(name), m_pose(position), m_beams(beams_num) 
     {
         for ( unsigned int i=0; i<beams_num; i++ ) {
             RangeSensor::Beam& beam( m_beams[i] );
@@ -46,7 +46,7 @@ namespace Gmapping {
         updateBeamsLookup();
     }
 
-    RangeSensor::updateBeamsLookup() {
+    void RangeSensor::updateBeamsLookup() {
         for ( unsigned int i=0; i<m_beams.size(); i++ ) {
             RangeSensor::Beam& beam( m_beams[i] );
             beam.s = sin( m_beams[i].pose.theta );

@@ -2,7 +2,7 @@
 #define SENSORREADING_H
 #include "sensor.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * SensorReading，传感器数据读取基类
@@ -22,8 +22,8 @@ namespace Gmapping {
 
         inline double getTime() const { return m_time; }
         inline void setTime( double time ) { m_time=time; }
-        inline Sensor* getSensor() const { return m_sensor; }
-    protected
+        inline const Sensor* getSensor() const { return m_sensor; }
+    protected:
         double m_time;
         const Sensor* m_sensor;
     };

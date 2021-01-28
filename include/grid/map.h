@@ -1,12 +1,12 @@
 #ifndef MAP_H
 #define MAP_H
 #include <assert.h>
-#include "harray2d.hpp"
+#include "harray2d.h"
 #include "array2d.h"
-#include "accessstate.hpp"
+#include "accessstate.h"
 #include "utils/point.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     typedef Array2D<double> DoubleArray2D;
 
@@ -67,9 +67,9 @@ namespace Gmapping {
         inline IntPoint world2map( const Point& p ) const;
         inline Point map2world( const IntPoint& p ) const;
         inline IntPoint world2map( double x, double y ) const { return world2map( Point(x,y) ); }
-        inline Point map2world( int x, int y ) const { return map2world( Inpoint(x,y) ); }
+        inline Point map2world( int x, int y ) const { return map2world( IntPoint(x,y) ); }
 
-        inline Point getCenter() const { return m_cenetr; }
+        inline Point getCenter() const { return m_center; }
         inline double getWorldSizeX() const { return m_worldSizeX; }
         inline double getWorldSizeY() const { return m_worldSizeY; }
         inline int getMapSizeX() const { return m_mapSizeX; }
@@ -115,7 +115,7 @@ namespace Gmapping {
         inline Storage& storage() { return m_storage; }
         inline const Storage& storage() const { return m_storage; }
 
-        DoubleArray2D* toDoubleArray() cosnt; // 没有使用过
+        DoubleArray2D* toDoubleArray() const; // 没有使用过
         Map< double, DoubleArray2D, false >* toDoubleMap() const; // 没有使用过
         
         
@@ -221,7 +221,7 @@ namespace Gmapping {
         m_worldSizeX=xmax-xmin;
         m_worldSizeY=ymax-ymin;
         m_sizeX2-=pxmin*(1<<m_storage.getPatchMagnitude());
-        m_sizeY2-=pymin*(1<<m_storage.getPatchMagnitude())
+        m_sizeY2-=pymin*(1<<m_storage.getPatchMagnitude());
     }
 
     /**
@@ -263,7 +263,7 @@ namespace Gmapping {
      */
     template< class Cell, class Storage, const bool isClass >
     IntPoint Map<Cell, Storage, isClass>::world2map( const Point& p ) const {
-        return InPoint( (int)round((p.x-m_center.x)/m_delta)+m_sizeX2, (int)round((p.y-m_center.y)/m_delta)+m_sizeY2 );
+        return IntPoint( (int)round((p.x-m_center.x)/m_delta)+m_sizeX2, (int)round((p.y-m_center.y)/m_delta)+m_sizeY2 );
     }
 
     /**
@@ -327,7 +327,7 @@ namespace Gmapping {
     template < class Cell, class Storage, const bool isClass >
     DoubleArray2D* Map<Cell,Storage,isClass>::toDoubleArray() const
     {
-            DoubleArray2D* darr=new DoubleArray2D(getMapSizeX()-1, getMapSizeY()-1);
+        DoubleArray2D* darr=new DoubleArray2D(getMapSizeX()-1, getMapSizeY()-1);
         for(int x=0; x<getMapSizeX()-1; x++)
             for(int y=0; y<getMapSizeY()-1; y++)
             {

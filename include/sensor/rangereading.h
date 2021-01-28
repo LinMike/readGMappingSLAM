@@ -4,7 +4,7 @@
 #include "rangesensor.h"
 #include "utils/point.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * RangeReading，激光传感器数据读取类，继承自传感器数据读取基类
@@ -22,7 +22,7 @@ namespace Gmapping {
      *      cartesianForm()，转换激光数据到笛卡尔坐标系下
      *      activeBeams()，指定激光密度，有多少有效的激光     
      */
-    class RangeReading: SensorReading {
+    class RangeReading: public SensorReading {
     public:
         unsigned int m_beams;
         std::vector<double> m_dists;
@@ -42,7 +42,7 @@ namespace Gmapping {
 
     protected:
         OrientedPoint m_pose;
-    }
+    };
 
 } // end namespace
 

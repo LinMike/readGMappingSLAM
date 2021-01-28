@@ -1,6 +1,6 @@
 #include "sensor/sensorreading.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     SensorReading::SensorReading( const Sensor* s, double time ) {
         m_sensor = s;

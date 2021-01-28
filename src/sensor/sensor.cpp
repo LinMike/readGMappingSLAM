@@ -1,8 +1,8 @@
 #include "sensor/sensor.h"
 
-namespace Gmapping {
+namespace GMapping {
 
-    Sensor::Sensor( const string& name ) {
+    Sensor::Sensor( const std::string& name ) {
         m_name = name;
     }
 

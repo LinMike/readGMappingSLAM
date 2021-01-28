@@ -27,7 +27,7 @@ std::vector<unsigned int> sistematicResampler<State,Numeric>::resample(const vec
 		}
 	}
 	return indexes;
-	}
+}
 
 template <class Numeric>
 std::vector<unsigned int> indexResampler<Numeric>::resample(const vector<Numeric> >& weights) const{

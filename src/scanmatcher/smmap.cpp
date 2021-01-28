@@ -1,6 +1,6 @@
 #include "scanmatcher/smmap.h"
 
-namespace Gmapping {
+namespace GMapping {
 
     /**
      * 利用静态指针unknown_ptr（默认为0）获取一个Cell（栅格）
