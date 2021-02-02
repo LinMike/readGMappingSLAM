@@ -40,7 +40,7 @@ namespace GMapping {
         for ( unsigned int i=0; i<n_beams; i++ ){
             m_dists[i] = d[i];
             m_angles[i] = angles[i];
-            std::cout << "dist: " << m_dists[i]<<", angle: " << m_angles[i] << std::endl;
+            // std::cout << "dist: " << m_dists[i]<<", angle: " << m_angles[i] << std::endl;
         }
 
     }

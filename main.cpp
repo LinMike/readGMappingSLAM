@@ -60,7 +60,6 @@ public:
 
     bool ReadLidarPoints(PointsCloud &pcs)
     {
-        std::cout << "read lidar begin pcs.angles.size = " << pcs.angles.size() << std::endl;
         double dists[720] = {0};
         double angles[720] = {0};
         for (int i = 0; i < 720; i++)
@@ -124,9 +123,9 @@ public:
             pcs.dists.assign(dists, dists+720);
             pcs.angles.assign(angles, angles+720);
 
-            break;
+            return true;
         }
-        return true;
+        return false;
     }
 
     void normalizeAngle(float &rad)
@@ -230,7 +229,7 @@ int main(int, char**) {
     // gsp.setUpdateDistances(0.1, 0.2, 0.5);
     gsp.setUpdateDistances(0.1, 0.1, 0.5);
     gsp.setminimumScore(0.0004);
-    // gsp.setgenerateMap(true);
+    // gsp.setgenerateMap(true); // alloc memory for free cell between center and hit point
     gsp.setllsamplerange(0.01);
     gsp.setllsamplestep(0.01);
     gsp.setlasamplerange(0.005);
@@ -264,7 +263,7 @@ int main(int, char**) {
         GMapping::RangeReading *reading = new GMapping::RangeReading(pcs.dists.size(), pcs.dists.data(), 
                     pcs.angles.data(), &lidar_sensor, pcs.ts);
         (*reading).setPose(GMapping::OrientedPoint(st.pos.x, st.pos.y, st.pos.z));
-        std::cout << "time: " << reading->getTime() << std::endl;
+        std::cout << "time: " << (long long int)reading->getTime() << std::endl;
         std::cout << (*reading).getPose() << std::endl;
         gsp.processScan(*reading, 30);
         last_ts = pcs.ts;
@@ -288,7 +287,6 @@ int main(int, char**) {
         cv::imshow("img", img);
         cv::waitKey(0);
         img = cv::Mat(1000, 1000, CV_8UC3, cv::Scalar(0));
-        std::cout << "pcs angles size: " << pcs.angles.size() << std::endl;
     }
 
     return 0;
