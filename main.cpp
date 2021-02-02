@@ -97,9 +97,13 @@ public:
                 float tmp = fangle;
                 // turn laser pose align to odom coordinate
                 fangle = -(fangle - M_PI_2);
+                std::cout << "rot : " << fangle << std::endl;
                 fangle = fmod( fangle, 2*M_PI );
+                std::cout << "fmod : " << fangle << std::endl;
                 if (fangle > M_PI)
                     fangle -= 2*M_PI;              // unit rad (-pi, pi]
+                else if (fangle < -M_PI)
+                    fangle += 2*M_PI;
                 std::cout << "fangle = " << fangle << ", tmp = " << tmp << std::endl;
 
                 float distance = strtof(strs[i+1].c_str(), 0);// unit m
@@ -133,6 +137,8 @@ public:
         rad = fmod(rad, 2*M_PI);
         if  (rad > M_PI)
             rad -= 2 * M_PI;
+        else if (rad <= -M_PI)
+            rad += 2 * M_PI;
     }
 
     cv::Point3f motion(RobotState state, float dt)
@@ -161,7 +167,12 @@ public:
             boost::split(strs, line, boost::is_any_of(","));
 
             float orientation = strtof(strs[1].c_str(), 0); // rad
-            float line_spd = strtof(strs[2].c_str(), 0) * 10; // line spd cm/s
+            // float line_spd = strtof(strs[2].c_str(), 0) * 10; // line spd cm/s
+            float line_spd = strtof(strs[2].c_str(), 0);
+            if (line_spd > 1)
+                line_spd = line_spd *10 / 100.0; // cm/s ==> m/s
+            else
+                line_spd = line_spd * 100;
             RobotState st;
             st.pos.z = orientation;
             st.line_spd = line_spd / 100.0; // cm/s ==> m/s
@@ -202,10 +213,11 @@ public:
             return findClosestStateByTS(ts, start, mid);
         else if (robotstates[mid].ts < ts)
             return findClosestStateByTS(ts, mid + 1, end);
+        return -1;
     }
 };
 
-int main(int, char**) {
+int main(int argc, char**argv) {
     GMapping::OdometrySensor odom_sensor("ODOM", false);
     // GMapping::RangeSensor lidar_sensor("FLASER", 720, 0.5, GMapping::OrientedPoint(15, 0, 0));
     double angles[720] = {0};
@@ -219,6 +231,17 @@ int main(int, char**) {
     GMapping::RangeReading lidar_reader(&lidar_sensor, 0);
 
     LidarPCloudTest lpt;
+    if (argc == 2)
+    {
+        std::string folder = argv[1];
+        lpt.lidar_log = folder + "/lidar.log";
+        lpt.odom_log = folder + "/odom.log";
+    }
+    else
+    {
+        lpt.lidar_log = "/home/shangjun/workspace/readGMappingSLAM_new/data/2021_1_10/lidar.log";
+        lpt.odom_log = "/home/shangjun/workspace/readGMappingSLAM_new/data/2021_1_10/odom.log";
+    }
     lpt.ReadRobotSpd();
     GMapping::GridSlamProcessor gsp;
     gsp.init(30, -20, -20, 20, 20, 0.05);
@@ -272,6 +295,8 @@ int main(int, char**) {
         GMapping::GridSlamProcessor::Particle bestP = gsp.getParticles()[max_index];
         std::cout << "max it node accweight: " << bestP.node->accWeight << ", weight = " << bestP.weight << ", sum weight = " << bestP.weightSum << std::endl;
         std::cout << bestP.pose << " ====> " << reading->getPose() << std::endl;
+
+        img = cv::Mat(1000, 1000, CV_8UC3, cv::Scalar(0));
         for (double i =0;i < bestP.map.getMapSizeX(); i++)
         {
             for (double j = 0; j < bestP.map.getMapSizeY(); j++)
@@ -279,15 +304,18 @@ int main(int, char**) {
                 GMapping::IntPoint p(i, j);
                 double occ = bestP.map.cell(p);
                 // std::cout << "occ = " << occ << std::endl;
+                // GMapping::Point pt = bestP.map.cell(p).mean();
                 if (occ >= 0.5)
-                    cv::circle(img, cv::Point(j, i), 3, cv::Scalar(0, 255, 0));
+                    // cv::circle(img, cv::Point(pt.x, pt.y)*100 + cv::Point(img.cols/2, img.rows/2), 3, cv::Scalar(0, 255, 0));
+                    cv::circle(img, cv::Point(j, i), 1, cv::Scalar(0, 255, 0));
             }
         }
 
         cv::imshow("img", img);
         cv::waitKey(0);
-        img = cv::Mat(1000, 1000, CV_8UC3, cv::Scalar(0));
     }
+    // save final obstacle map image
+    cv::imwrite("obstacles_map.jpg", img);
 
     return 0;
 }

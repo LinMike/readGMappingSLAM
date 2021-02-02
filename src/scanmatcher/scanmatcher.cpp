@@ -209,7 +209,7 @@ namespace GMapping {
         lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
         lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
         lp.theta+=m_laserPose.theta;
-        IntPoint p0=map.world2map(lp);
+        // IntPoint p0=map.world2map(lp);
         
         Point min(map.map2world(0,0));
         Point max(map.map2world(map.getMapSizeX()-1,map.getMapSizeY()-1));
