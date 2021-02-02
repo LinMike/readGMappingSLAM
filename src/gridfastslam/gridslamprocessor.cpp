@@ -178,10 +178,8 @@ GridSlamProcessor::~GridSlamProcessor()
             node = node->parent;
         cerr << "@" << endl;
 #endif
-        std::cout << "it->node : " << it->node << std::endl;
         if (it->node)
         {
-            cout << "l=" << it->weight << endl;
             delete it->node;
         }
     }
@@ -271,8 +269,8 @@ void GridSlamProcessor::init(unsigned int size, double xmin, double ymin, double
         m_particles.back().setWeight(0);
         m_particles.back().previousIndex = 0;
         // we use the root directly
-        // m_particles.back().node = node;
-        m_particles.back().node = new TNode(initialPose, 0, 0, 0);
+        m_particles.back().node = node;
+        // m_particles.back().node = new TNode(initialPose, 0, 0, 0);
     }
     m_neff = (double)size;
     m_count = 0;
@@ -439,7 +437,7 @@ bool GridSlamProcessor::processScan(const RangeReading &reading, int adaptPartic
                 m_matcher.registerScan(it->map, it->pose, plainReading);
                 TNode *node = new TNode(it->pose, 0., it->node, 0);
                 node->reading = reading_copy;
-                it->node = node;
+                it->node = node;    //node保存这个粒子的轨迹树，雷达数据，权重等信息
             }
         }
         // 进行重采样之后，粒子的权重又会发生变化，因此需要再次更新粒子轨迹的累计权重
@@ -479,6 +477,7 @@ int GridSlamProcessor::getBestParticleIndex() const
             bi = i;
         }
     }
+    std::cout << "getBestParticle weightSum = " << bw << std::endl;
     return (int)bi;
 }
 

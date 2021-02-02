@@ -129,7 +129,7 @@ orientedpoint<T,A> absoluteDifference(const orientedpoint<T,A>& p1,const oriente
 	delta.theta=atan2(sin(delta.theta), cos(delta.theta));  // 为什么还要这样算一遍？
 	double s=sin(p2.theta), c=cos(p2.theta);
 	return orientedpoint<T,A>(c*delta.x+s*delta.y, 
-	                         -s*delta.x+c*delta.y, delta.theta);
+	                         -s*delta.x+c*delta.y, delta.theta);// delta表示p1,p2在原始坐标系中的偏移量，需要转化到以p2为原点的坐标系计算偏移量来叠加噪声
 }
 
 /*
@@ -141,6 +141,12 @@ orientedpoint<T,A> absoluteSum(const orientedpoint<T,A>& p1,const orientedpoint<
 	double s=sin(p1.theta), c=cos(p1.theta);
 	return orientedpoint<T,A>(c*p2.x-s*p2.y,
                               s*p2.x+c*p2.y, p2.theta) + p1;
+}
+
+template <class T, class A>
+std::ostream& operator<<(std::ostream& os, const orientedpoint<T, A>& p1)
+{
+    return (os << "[" << p1.x << ", " << p1.y << ", " << p1.theta << "]");
 }
 
 /*一个位姿和一个位置的和*/

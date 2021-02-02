@@ -86,7 +86,7 @@ namespace GMapping {
     protected:
         bool m_activeAreaComputed;
         unsigned int m_laserBeams;
-        double *m_laserAngles;
+        double m_laserAngles[2048];
 
         PARAM_SET_GET(OrientedPoint, laserPose, protected, public, public)
         PARAM_SET_GET(double, laserMaxRange, protected, public, public)
@@ -159,7 +159,8 @@ namespace GMapping {
             pfree.x += (*r - freeDelta) * cos( lp.theta + *angle );
             pfree.y += (*r - freeDelta) * sin( lp.theta + *angle );
             pfree = pfree - phit;	// 两者距离
-            IntPoint ipfree = map.world2map(pfree);
+            // IntPoint ipfree = map.world2map(pfree);
+            IntPoint ipfree = map.world2map(pfree) - map.world2map(map.getCenter()); // phit为原点的向量
             
             bool found = false;
             Point bestMu(0., 0.);
@@ -247,7 +248,7 @@ namespace GMapping {
             pfree.x += (*r - freeDleta) * cos(lp.theta + *angle);
             pfree.y += (*r - freeDleta) * sin(lp.theta + *angle);
             pfree = pfree - phit;  // 两者距离
-            IntPoint ipfree = map.world2map(pfree);
+            IntPoint ipfree = map.world2map(pfree) - map.world2map(map.getCenter()); // phit为原点的向量;
 
             bool found = false;
             Point bestMu(0., 0.);

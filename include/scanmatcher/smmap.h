@@ -52,10 +52,10 @@ namespace GMapping {
      */
     void PointAccumulator::update( bool value, const Point& p ) {
         if ( value ) {
-            acc.x += static_cast<float>(p.x);
+            acc.x += static_cast<float>(p.x);//击中的雷达点的坐标求和，后面用mean求中心点
             acc.y += static_cast<float>(p.y);
-            n++;
-            visits += SIGHT_INC;
+            n++;//击中次数
+            visits += SIGHT_INC;//访问次数，概率=n / visits
         } else {
             visits ++;
         }

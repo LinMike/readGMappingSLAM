@@ -274,9 +274,9 @@ double propagateWeight( GridSlamProcessor::TNode* n, double weight ) {
     // 更新节点n的accWeight值
     n->accWeight+=weight;
     
-    if ( n->visitCounter == n->childs ) {
-        w = propagateWeight(n->parent, n->accWeight);
-    }
+    if ( n->visitCounter == n->childs ) {            //经过重采样后的粒子群中会有重复的粒子，这些重复的粒子的叶子节点拥有
+        w = propagateWeight(n->parent, n->accWeight);//相同的父节点，这个父节点的accWeight表示这些子节点的累计权重
+    }                                                //如果当前节点只有一个子节点，那么accWeight表示叶子节点的权重
     assert( n->visitCounter <= n->childs );
     return w;
 }

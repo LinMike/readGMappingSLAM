@@ -49,6 +49,7 @@ aux_source_directory(src/scanmatcher MATCHERSOURCES)
 aux_source_directory(src/sensor SENSORSOURCES)
 aux_source_directory(src/utils UTILSOURCES)
 
+link_libraries(${OpenCV_LIBS})
 list(APPEND SOURCES ${GRIDSOURCES} ${MODELSOURCES} ${MATCHERSOURCES} ${SENSORSOURCES} ${UTILSOURCES})
 message(STATUS "source files: ${SOURCES}")
 add_executable(gmapping ${SOURCES})

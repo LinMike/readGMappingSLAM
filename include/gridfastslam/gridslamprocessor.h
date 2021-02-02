@@ -312,8 +312,10 @@ inline void GridSlamProcessor::scanMatch( const double *plainReading ) {
         // 给定scan（激光雷达观测数据）和map（地图，作参考帧），利用似然场观测模型，
         // 优化里程计运动模型更新得到的估计位姿，利用该位姿迭代求解得到一个最优位姿
         score = m_matcher.optimize( corrected, it->map, it->pose, plainReading );
+        std::cout << "score = " << score << std::endl;
         // 如果优化成功，则更新该粒子的位姿为optimize()输出的最优估计位姿
         if ( score>m_minimumScore ) {
+            std::cout << "optimized pose: " << corrected << ", origin pose: " << it->pose << std::endl;
             it->pose = corrected;
         } else {
             // 如果优化失败，则仍使用之前里程计运动模型采样更新得到机器人位姿
@@ -353,7 +355,7 @@ inline void GridSlamProcessor::normalize() {
     for ( ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++ ) {
         lmax = it->weight>lmax?it->weight:lmax;
     }
-    // cout << "!!!!!!!!!!! maxwaight= "<< lmax << endl;
+    std::cout << "!!!!!!!!!!! maxwaight= "<< lmax << std::endl;
 
     // 以最大权重为中心的高斯分布
     m_weights.clear();
@@ -362,12 +364,13 @@ inline void GridSlamProcessor::normalize() {
     for ( std::vector<Particle>::iterator it=m_particles.begin(); it!=m_particles.end(); it++ ) {
         m_weights.push_back( exp( gain*(it->weight - lmax) ) );
         wcum += m_weights.back();
-        // cout << "l=" << it->weight<< endl;
+        std::cout << "l=" << it->weight<< std::endl;
     }
     // 计算有效粒子数 和 归一化权重
     m_neff=0;
     for ( std::vector<double>::iterator it=m_weights.begin(); it!=m_weights.end(); it++ ) {
         *it = *it/wcum;
+        std::cout << "normalize m_weights: index = " << (it-m_weights.begin()) << ", weight = " << *it << std::endl;
         // 权重 wi = exp( (1/SigmaGain*N)*(wi - wmax) ) / sum( exp( (1/SigmaGain*N)*(wi - wmax) ) )
         double w = *it;
         m_neff += w*w;
@@ -423,10 +426,10 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
             // temp数组暂存重采样之后的粒子群
             temp.push_back(p);
             temp.back().node = node;
-            temp.back().previousIndex = m_indexes[i];
+            temp.back().previousIndex = m_indexes[i];//当前粒子群由上一组粒子群重采样得到，记录这个粒子在上一组中的下标
         }
         // 处理那些重复的下标
-        while ( j<m_indexes.size() ) {
+        while ( j<m_indexes.size() ) {//上一组粒子群中最后一个被选中的粒子下标之后的粒子都删除
             deletedParticles.push_back(j);
             j++;           
         }

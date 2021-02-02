@@ -76,8 +76,9 @@ namespace GMapping {
         assert(beams < LASER_MAXBEAMS);
         m_laserPose = lpose;
         m_laserBeams = beams;
-        //m_laserAngles=new double[beams];
-        memcpy( &m_laserAngles, angles, sizeof(double)*m_laserBeams );
+        // m_laserAngles=new double[beams];
+        memcpy( m_laserAngles, angles, sizeof(double)*m_laserBeams );
+        // std::cout << "param beams: " << m_laserBeams << std::endl;
     }
 
     /** 设置匹配参数 */
@@ -194,6 +195,12 @@ namespace GMapping {
         return bestScore;
     }
 
+    /**
+     * 根据雷达数据计算map中被点云数据覆盖的区域，表示这些区域时激活区域，更新cell击中或空闲状态
+     * map的第一层cell表示patch，patch的cell表示map的坐标点，如果m_generateMap为false，则没有击中的patch不需要分配空间(稀疏矩阵)
+     * 以laser坐标点p转换雷达点云数据，m_generateMap为true激光束覆盖的区域的空闲区域也设为激活区域，否则只以击中点为激活区域
+     * activeAreas表示每个patch的位置，以patch为单位分配空间
+     */
     void ScanMatcher::computeActiveArea(ScanMatcherMap& map, const OrientedPoint& p, const double* readings)
     {
         if (m_activeAreaComputed)
@@ -220,10 +227,14 @@ namespace GMapping {
             Point phit=lp;
             phit.x+=d*cos(lp.theta+*angle);
             phit.y+=d*sin(lp.theta+*angle);
-            if (phit.x<min.x) min.x=phit.x;
-            if (phit.y<min.y) min.y=phit.y;
-            if (phit.x>max.x) max.x=phit.x;
-            if (phit.y>max.y) max.y=phit.y;
+            if (phit.x<min.x)
+                min.x=phit.x;
+            if (phit.y<min.y)
+                min.y=phit.y;
+            if (phit.x>max.x)
+                max.x=phit.x;
+            if (phit.y>max.y)
+                max.y=phit.y;
         }
         //min=min-Point(map.getDelta(),map.getDelta());
         //max=max+Point(map.getDelta(),map.getDelta());
@@ -258,7 +269,7 @@ namespace GMapping {
                 //IntPoint linePoints[20000] ;
                 GridLineTraversalLine line;
                 line.points=m_linePoints;
-                GridLineTraversal::gridLine(p0, p1, &line);
+                GridLineTraversal::gridLine(p0, p1, &line);//Map生成后根据雷达的激光线段来设置线段经过点的patch集合作为激活区域
                 for (int i=0; i<line.num_points-1; i++){
                     assert(map.isInside(m_linePoints[i]));
                     activeArea.insert(map.storage().patchIndexes(m_linePoints[i]));
@@ -269,7 +280,7 @@ namespace GMapping {
                     assert(cp.x>=0 && cp.y>=0);
                     activeArea.insert(cp);
                 }
-            } else {
+            } else {// 第一帧数据Map还没生成时，直接使用hit点找对应的patch集合作为激活的区域
                 if (*r>m_laserMaxRange||*r>m_usableRange||*r==0.0||isnan(*r)) continue;
                 Point phit=lp;
                 phit.x+=*r*cos(lp.theta+*angle);
@@ -294,6 +305,11 @@ namespace GMapping {
         m_activeAreaComputed=true;
     }
 
+    /**
+     * 将雷达的点云数据击中点转化为map坐标，累加到cell中
+     * 如果m_generateMap为false，则只更新击中点
+     * 否则laser坐标p与击中点的激光束中空闲区域也累加visits
+     */ 
     double ScanMatcher::registerScan(ScanMatcherMap& map, const OrientedPoint& p, const double* readings)
     {
         if (!m_activeAreaComputed)
@@ -306,14 +322,14 @@ namespace GMapping {
         lp.x+=cos(p.theta)*m_laserPose.x-sin(p.theta)*m_laserPose.y;
         lp.y+=sin(p.theta)*m_laserPose.x+cos(p.theta)*m_laserPose.y;
         lp.theta+=m_laserPose.theta;
-        IntPoint p0=map.world2map(lp);
+        IntPoint p0=map.world2map(lp);// calculate lidar pose in map
         
         
         const double * angle=m_laserAngles+m_initialBeamSkip;
         double esum=0;
         for (const double* r=readings+m_initialBeamSkip; r<readings+m_laserBeams; r++, angle++)
-            if (m_generateMap){
-                double d=*r;
+            if (m_generateMap){//第一帧数据时还不会生成map，使用雷达数据的击中点累加到cell的acc中
+                double d=*r;    // m_generateMap为ture，则对激光束的空闲区域也分配空间并更新
                 if (d>m_laserMaxRange||d==0.0||isnan(d))
                     continue;
                 if (d>m_usableRange)
@@ -323,28 +339,29 @@ namespace GMapping {
                 //IntPoint linePoints[20000] ;
                 GridLineTraversalLine line;
                 line.points=m_linePoints;
-                GridLineTraversal::gridLine(p0, p1, &line);
-                for (int i=0; i<line.num_points-1; i++){
+                GridLineTraversal::gridLine(p0, p1, &line); //激光束从机器到击中点的直线
+                for (int i=0; i<line.num_points-1; i++){    //除去击中点外线上的其他位置时空闲区域
                     PointAccumulator& cell=map.cell(line.points[i]);
-                    double e=-cell.entropy();
+                    double e=-cell.entropy();               // ?
                     cell.update(false, Point(0,0));
                     e+=cell.entropy();
                     esum+=e;
                 }
-                if (d<m_usableRange){
+                if (d<m_usableRange){   //如果击中点超出雷达检测范围(可能是错误数据)，则只用空闲区域，否则将击中点也加到map中
                     double e=-map.cell(p1).entropy();
                     map.cell(p1).update(true, phit);
                     e+=map.cell(p1).entropy();
                     esum+=e;
                 }
-            } else {
+            } else {    //为false则只对击中点分配空间并更新
                 if (*r>m_laserMaxRange||*r>m_usableRange||*r==0.0||isnan(*r)) continue;
                 Point phit=lp;
                 phit.x+=*r*cos(lp.theta+*angle);
-                phit.y+=*r*sin(lp.theta+*angle);
-                IntPoint p1=map.world2map(phit);
-                assert(p1.x>=0 && p1.y>=0);
-                map.cell(p1).update(true,phit);
+                phit.y+=*r*sin(lp.theta+*angle);//命中的点云数据结合laser坐标转化为世界坐标
+                IntPoint p1=map.world2map(phit);//世界坐标转地图坐标
+                assert(p1.x>=0 && p1.y>=0);     //地图坐标(二维数组下标)的（0,0）点对应(xMin, yMin)，因此地图坐标不会有x<0或y<0
+                map.cell(p1).update(true,phit); //地图的p1点的命中次数累加，访问次数累加，
+                                                //累加击中的世界坐标点(accx += x, accy += y),击中的中心即为(accx/n, accy/n)
             }
         //cout  << "informationGain=" << -esum << endl;
         return esum;
