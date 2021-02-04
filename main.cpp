@@ -24,7 +24,7 @@ public:
 
 std::ostream &operator << (std::ostream &os, const RobotState &rb)
 {
-    os << "state: " << rb.pos << ", " << cv::Vec2d(rb.line_spd, rb.rot_spd) << ", ts: " << rb.ts;
+    os << "state: " << rb.pos << ", " << cv::Vec2d(rb.line_spd, rb.rot_spd) << ", ts: " << (long long int)rb.ts;
     return os;
 }
 
@@ -94,7 +94,6 @@ public:
                 // float distance = (float)strtof(strs[i+1].c_str(), 0)/4.0f/10;  // cm
                 // double fangle = nangle*M_PI/180;
                 double fangle = strtof(strs[i].c_str(), 0);
-                float tmp = fangle;
                 // // turn laser pose align to odom coordinate
                 // fangle = -(fangle - M_PI_2);
                 // std::cout << "rot : " << fangle << std::endl;
@@ -149,6 +148,36 @@ public:
         return state.pos;
     }
 
+    void ReadRobotOdom()
+    {
+        std::ifstream ifs;
+        if (!ifs.is_open()) ifs.open(odom_log.c_str(), std::ios_base::in);
+        std::string line;
+
+        RobotState last_state;
+        while (!ifs.eof())
+        {
+            std::getline(ifs, line);
+            if (line.length() == 0)
+                continue;
+            std::vector<std::string> strs;
+            boost::split(strs, line, boost::is_any_of(","));
+            float x = strtof(strs[0].c_str(), 0);
+            float y = strtof(strs[1].c_str(), 0);
+            float theta = strtof(strs[2].c_str(), 0);
+            normalizeAngle(theta);
+            double ts = strtoll(strs[3].c_str(), 0, 0);
+            RobotState st;
+            st.pos.x = x;
+            st.pos.y = y;
+            st.pos.z = theta;
+            st.ts = ts;
+            robotstates.push_back(st);
+            std::cout << st << std::endl;
+        }
+        ifs.close();
+    }
+
     std::vector<RobotState> robotstates; 
     void ReadRobotSpd()
     {
@@ -195,6 +224,7 @@ public:
             std::cout << st << ", orien: " << orientation << ", dt: " << (st.ts - last_state.ts)/1000.0f << std::endl;
             robotstates.push_back(st);
         }
+        ifs.close();
     }
 
     int findClosestStateByTS(long long int ts, int start, int end)
@@ -243,6 +273,8 @@ int main(int argc, char**argv) {
         lpt.odom_log = "/home/shangjun/workspace/readGMappingSLAM_new/data/2021_1_10/odom.log";
     }
     lpt.ReadRobotSpd();
+    // lpt.odom_log = "/home/shangjun/workspace/readGMappingSLAM_new/build/robot_odom_reverse.log";
+    // lpt.ReadRobotOdom();
     GMapping::GridSlamProcessor gsp;
     int n_particles = 5;
     gsp.init(n_particles, -20, -20, 20, 20, 0.05);
@@ -253,7 +285,11 @@ int main(int argc, char**argv) {
     // gsp.setUpdateDistances(0.1, 0.2, 0.5);
     gsp.setUpdateDistances(0.1, 0.1, 0.5);
     gsp.setminimumScore(0.0004);
-    // gsp.setgenerateMap(true); // alloc memory for free cell between center and hit point
+    /**
+     * m_generateMap设置为true，会使用激光束的击中点和空闲线段更新地图的visits和n
+     * 避免只更新击中点可能出现地图的障碍物点偏移
+     */
+    gsp.setgenerateMap(true); // alloc memory for free cell between center and hit point
     gsp.setllsamplerange(0.01);
     gsp.setllsamplestep(0.01);
     gsp.setlasamplerange(0.005);
@@ -289,7 +325,11 @@ int main(int argc, char**argv) {
         (*reading).setPose(GMapping::OrientedPoint(st.pos.x, st.pos.y, st.pos.z));
         std::cout << "time: " << (long long int)reading->getTime() << std::endl;
         std::cout << (*reading).getPose() << std::endl;
+        cv::TickMeter tm;
+        tm.start();
         gsp.processScan(*reading, n_particles);
+        tm.stop();
+        std::cout << "timespend " << tm.getTimeMilli() << std::endl;
         last_ts = pcs.ts;
 
         int max_index = gsp.getBestParticleIndex();
@@ -306,7 +346,7 @@ int main(int argc, char**argv) {
                 double occ = bestP.map.cell(p);
                 // std::cout << "occ = " << occ << std::endl;
                 // GMapping::Point pt = bestP.map.cell(p).mean();
-                if (occ >= 0.5)
+                if (occ >= 0.5 /* || bestP.map.cell(p).n >= 10 */)
                     // cv::circle(img, cv::Point(pt.x, pt.y)*100 + cv::Point(img.cols/2, img.rows/2), 3, cv::Scalar(0, 255, 0));
                     cv::circle(img, cv::Point(j, i), 1, cv::Scalar(0, 255, 0));
             }
@@ -320,7 +360,7 @@ int main(int argc, char**argv) {
         // std::cout << "arrow : " << cv::Point2d(cos(bestP.pose.theta), sin(bestP.pose.theta))*10+cv::Point2d(irobot.x, irobot.y) << std::endl;
 
         cv::imshow("img", img);
-        cv::waitKey(0);
+        cv::waitKey(10);
     }
     // save final obstacle map image
     cv::imwrite("obstacles_map.jpg", img);
