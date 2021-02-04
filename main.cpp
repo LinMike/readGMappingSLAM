@@ -95,16 +95,16 @@ public:
                 // double fangle = nangle*M_PI/180;
                 double fangle = strtof(strs[i].c_str(), 0);
                 float tmp = fangle;
-                // turn laser pose align to odom coordinate
-                fangle = -(fangle - M_PI_2);
-                std::cout << "rot : " << fangle << std::endl;
+                // // turn laser pose align to odom coordinate
+                // fangle = -(fangle - M_PI_2);
+                // std::cout << "rot : " << fangle << std::endl;
                 fangle = fmod( fangle, 2*M_PI );
-                std::cout << "fmod : " << fangle << std::endl;
+                // std::cout << "fmod : " << fangle << std::endl;
                 if (fangle > M_PI)
                     fangle -= 2*M_PI;              // unit rad (-pi, pi]
-                else if (fangle < -M_PI)
-                    fangle += 2*M_PI;
-                std::cout << "fangle = " << fangle << ", tmp = " << tmp << std::endl;
+                else if (fangle <= -M_PI)
+                    fangle += 2*M_PI;               // FIXME angle may be greater than M_PI
+                // std::cout << "fangle = " << fangle << ", tmp = " << tmp << std::endl;
 
                 float distance = strtof(strs[i+1].c_str(), 0);// unit m
                 cv::Point2f point;
@@ -244,10 +244,11 @@ int main(int argc, char**argv) {
     }
     lpt.ReadRobotSpd();
     GMapping::GridSlamProcessor gsp;
-    gsp.init(30, -20, -20, 20, 20, 0.05);
+    int n_particles = 5;
+    gsp.init(n_particles, -20, -20, 20, 20, 0.05);
     // gsp.setlaserPose(GMapping::OrientedPoint(20, 0, 0));
     // gsp.setlaserMaxRange(10);
-    gsp.setMatchingParameters(15, 15, 0.05, 1, 0.05, 0.05, 5/* , 0.075 *//* , 3.0, 0 */);
+    gsp.setMatchingParameters(/*15*/25, /*15*/25, 0.05, 1, 0.05, 0.05, 5/* , 0.075 *//* , 3.0, 0 */);
     gsp.setMotionModelParameters(0.1, 0.05, 0.1, 0.2);
     // gsp.setUpdateDistances(0.1, 0.2, 0.5);
     gsp.setUpdateDistances(0.1, 0.1, 0.5);
@@ -288,7 +289,7 @@ int main(int argc, char**argv) {
         (*reading).setPose(GMapping::OrientedPoint(st.pos.x, st.pos.y, st.pos.z));
         std::cout << "time: " << (long long int)reading->getTime() << std::endl;
         std::cout << (*reading).getPose() << std::endl;
-        gsp.processScan(*reading, 30);
+        gsp.processScan(*reading, n_particles);
         last_ts = pcs.ts;
 
         int max_index = gsp.getBestParticleIndex();
@@ -310,6 +311,13 @@ int main(int argc, char**argv) {
                     cv::circle(img, cv::Point(j, i), 1, cv::Scalar(0, 255, 0));
             }
         }
+        GMapping::Point robot(bestP.pose.y, bestP.pose.x);
+        GMapping::IntPoint irobot = bestP.map.world2map(robot);
+        cv::circle(img, cv::Point(irobot.x, irobot.y), 5, cv::Scalar::all(255), 1, 4);
+        // cv::line(img, cv::Point(irobot.x, irobot.y), 
+        //         cv::Point2d(cos(bestP.pose.theta), sin(bestP.pose.theta))*10+cv::Point2d(irobot.x, irobot.y), cv::Scalar::all(255));
+        // std::cout << "robot : " <<cv::Point(irobot.x, irobot.y)<< std::endl;
+        // std::cout << "arrow : " << cv::Point2d(cos(bestP.pose.theta), sin(bestP.pose.theta))*10+cv::Point2d(irobot.x, irobot.y) << std::endl;
 
         cv::imshow("img", img);
         cv::waitKey(0);

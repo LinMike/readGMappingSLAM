@@ -397,7 +397,9 @@ bool GridSlamProcessor::processScan(const RangeReading &reading, int adaptPartic
     bool processed = false;
     // process a scan only if the robot has traveled a given distance or a certain amount of time has elapsed
     // 只有当机器人走过一定的距离  或者 旋转过一定的角度  或者过一段指定的时间才处理激光数据
-    if (!m_count || m_linearDistance >= m_linearThresholdDistance || m_angularDistance >= m_angularThresholdDistance || (period_ >= 0.0 && (reading.getTime() - last_update_time_) > period_))
+    std::cout << "m_linearDistance = " << m_linearDistance << ", m_angularDistance = " << m_angularDistance << std::endl;
+    std::cout << "period_ = " << period_ << ", time interval = " << reading.getTime() - last_update_time_ << std::endl;
+    if (!m_count || m_linearDistance >= m_linearThresholdDistance || m_angularDistance >= m_angularThresholdDistance || (period_ >= 0.0 && (reading.getTime() - last_update_time_)/1000.0 > period_))
     {
         last_update_time_ = reading.getTime();
         // this is for converting the reading in a scan-matcher feedable form
