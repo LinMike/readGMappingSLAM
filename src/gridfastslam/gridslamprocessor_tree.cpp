@@ -233,12 +233,24 @@ void GridSlamProcessor::integrateScanSequence(GridSlamProcessor::TNode* node)
  * 更新权重
  */
 void GridSlamProcessor::updateTreeWeights(bool weightsAlreadyNormalized) {
+    cv::TickMeter tm;
+    tm.start();
     if ( !weightsAlreadyNormalized ) {
 		// 权重归一化处理，同时计算出有效粒子数neff值
         normalize();
     }
+    tm.stop();
+    std::cout << "normalize time : " << tm.getTimeMilli() << std::endl;
+    tm.reset();
+    tm.start();
     resetTree();
+    tm.stop();
+    std::cout << "reset Tree time : " << tm.getTimeMilli() << std::endl;
+    tm.reset();
+    tm.start();
     propagateWeights();
+    tm.stop();
+    std::cout << "propagateWeights time : " << tm.getTimeMilli() << std::endl;
 }
 
 /**

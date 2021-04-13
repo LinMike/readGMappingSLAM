@@ -2,7 +2,9 @@
 #include <opencv2/opencv.hpp>
 #include <boost/date_time.hpp>
 #include <boost/shared_ptr.hpp>
+#include <boost/algorithm/string.hpp>
 #include "gridfastslam/gridslamprocessor.h"
+#include <signal.h>
 
 class PointsCloud
 {
@@ -89,39 +91,24 @@ public:
             int index = 0;
             for (size_t i = 2; i < strs.size() - 1; i+=2)
             {
-                // float nangle = (float)(int(strtof(strs[i].c_str(), 0)) >> 1)/64.0f;
-                // nangle = ChangeLidarAngle(nangle);
-                // float distance = (float)strtof(strs[i+1].c_str(), 0)/4.0f/10;  // cm
-                // double fangle = nangle*M_PI/180;
                 double fangle = strtof(strs[i].c_str(), 0);
                 // // turn laser pose align to odom coordinate
                 // fangle = -(fangle - M_PI_2);
-                // std::cout << "rot : " << fangle << std::endl;
+                std::cout << "rot : " << fangle << std::endl;
                 fangle = fmod( fangle, 2*M_PI );
-                // std::cout << "fmod : " << fangle << std::endl;
+                std::cout << "fmod : " << fangle << std::endl;
                 if (fangle > M_PI)
                     fangle -= 2*M_PI;              // unit rad (-pi, pi]
                 else if (fangle <= -M_PI)
                     fangle += 2*M_PI;               // FIXME angle may be greater than M_PI
-                // std::cout << "fangle = " << fangle << ", tmp = " << tmp << std::endl;
+                
+                // fangle = -fangle;
+                std::cout << "fangle222 = " << fangle << std::endl;
 
                 float distance = strtof(strs[i+1].c_str(), 0);// unit m
-                cv::Point2f point;
-                point.x = cos(fangle)*distance;   // X向前为正
-                point.y = sin(fangle)*distance;  // Y向左为正
-
-                // point = changelidar2odom(point*100, M_PI, 15, 0);
-                // point *= 100;
-                // pcs.pts.push_back(point);
-                
-                // pcs.dists.push_back(distance);
-                // pcs.angles.push_back(fangle);
                 index = (fangle / M_PI * 180 + 180) * 2;
                 dists[index] = distance;
                 angles[index] = fangle;
-                // int index = (fangle / M_PI * 180 + 180) * 2;
-                // dists[index] = distance;
-                // angles[index] = fangle /* /M_PI*180 */;
             }
             pcs.dists.assign(dists, dists+720);
             pcs.angles.assign(angles, angles+720);
@@ -140,13 +127,13 @@ public:
             rad += 2 * M_PI;
     }
 
-    cv::Point3f motion(RobotState state, float dt)
+    /* cv::Point3f motion(RobotState state, float dt)
     {
         normalizeAngle(state.pos.z);
         state.pos.x += state.line_spd * cos(state.pos.z) * dt;
         state.pos.y += state.line_spd * sin(state.pos.z) * dt;
         return state.pos;
-    }
+    } */
 
     void ReadRobotOdom()
     {
@@ -162,14 +149,14 @@ public:
                 continue;
             std::vector<std::string> strs;
             boost::split(strs, line, boost::is_any_of(","));
-            float x = strtof(strs[0].c_str(), 0);
-            float y = strtof(strs[1].c_str(), 0);
-            float theta = strtof(strs[2].c_str(), 0);
+            float x = strtof(strs[1].c_str(), 0);
+            float y = strtof(strs[2].c_str(), 0);
+            float theta = strtof(strs[3].c_str(), 0);
             normalizeAngle(theta);
-            double ts = strtoll(strs[3].c_str(), 0, 0);
+            double ts = strtoll(strs[0].c_str(), 0, 0);
             RobotState st;
-            st.pos.x = x;
-            st.pos.y = y;
+            st.pos.x = x/100.0;
+            st.pos.y = y/100.0;
             st.pos.z = theta;
             st.ts = ts;
             robotstates.push_back(st);
@@ -179,7 +166,7 @@ public:
     }
 
     std::vector<RobotState> robotstates; 
-    void ReadRobotSpd()
+    /* void ReadRobotSpd()
     {
         std::ifstream ifs;
         if (!ifs.is_open()) ifs.open(odom_log.c_str(), std::ios_base::in);
@@ -225,7 +212,7 @@ public:
             robotstates.push_back(st);
         }
         ifs.close();
-    }
+    } */
 
     int findClosestStateByTS(long long int ts, int start, int end)
     {
@@ -247,7 +234,15 @@ public:
     }
 };
 
+bool running = true;
+void handle(int sig)
+{
+    running = false;
+}
+
 int main(int argc, char**argv) {
+    signal(SIGINT, handle);
+
     GMapping::OdometrySensor odom_sensor("ODOM", false);
     // GMapping::RangeSensor lidar_sensor("FLASER", 720, 0.5, GMapping::OrientedPoint(15, 0, 0));
     double angles[720] = {0};
@@ -269,19 +264,19 @@ int main(int argc, char**argv) {
     }
     else
     {
-        lpt.lidar_log = "/home/shangjun/workspace/readGMappingSLAM_new/data/2021_1_10/lidar.log";
-        lpt.odom_log = "/home/shangjun/workspace/readGMappingSLAM_new/data/2021_1_10/odom.log";
+        lpt.lidar_log = "/home/mike/OneDrive/workspace/gmapping_data/lidar.log";
+        lpt.odom_log = "/home/mike/OneDrive/workspace/gmapping_data/odom.log";
     }
-    lpt.ReadRobotSpd();
+    // lpt.ReadRobotSpd();
     // lpt.odom_log = "/home/shangjun/workspace/readGMappingSLAM_new/build/robot_odom_reverse.log";
-    // lpt.ReadRobotOdom();
+    lpt.ReadRobotOdom();
     GMapping::GridSlamProcessor gsp;
     int n_particles = 5;
     gsp.init(n_particles, -20, -20, 20, 20, 0.05);
     // gsp.setlaserPose(GMapping::OrientedPoint(20, 0, 0));
     // gsp.setlaserMaxRange(10);
-    gsp.setMatchingParameters(/*15*/25, /*15*/25, 0.05, 1, 0.05, 0.05, 5/* , 0.075 *//* , 3.0, 0 */);
-    gsp.setMotionModelParameters(0.1, 0.05, 0.1, 0.2);
+    gsp.setMatchingParameters(/*15*/8/* 25 */, /*15*/8/* 25 */, 0.05, 1, 0.05, 0.05, 5/* , 0.075 *//* , 3.0, 0 */);
+    gsp.setMotionModelParameters(0.01, 0, 0.001, 0);
     // gsp.setUpdateDistances(0.1, 0.2, 0.5);
     gsp.setUpdateDistances(0.1, 0.1, 0.5);
     gsp.setminimumScore(0.0004);
@@ -329,7 +324,7 @@ int main(int argc, char**argv) {
         tm.start();
         gsp.processScan(*reading, n_particles);
         tm.stop();
-        std::cout << "timespend " << tm.getTimeMilli() << std::endl;
+        std::cout << "++++++++++++++++++ ProcessScan Time : " << tm.getTimeMilli() << std::endl;
         last_ts = pcs.ts;
 
         int max_index = gsp.getBestParticleIndex();
@@ -348,17 +343,29 @@ int main(int argc, char**argv) {
                 // GMapping::Point pt = bestP.map.cell(p).mean();
                 if (occ >= 0.5 /* || bestP.map.cell(p).n >= 10 */)
                     // cv::circle(img, cv::Point(pt.x, pt.y)*100 + cv::Point(img.cols/2, img.rows/2), 3, cv::Scalar(0, 255, 0));
-                    cv::circle(img, cv::Point(j, i), 1, cv::Scalar(0, 255, 0));
+                    // cv::circle(img, cv::Point(j, i), 1, cv::Scalar(0, 255, 0));
+                    cv::circle(img, cv::Point(i, j), 1, cv::Scalar(0, 255, 0));
+                else
+                {
+                    GMapping::PointAccumulator pa = bestP.map.cell(p);
+                    if (pa.visits > 0)
+                        // img.at<cv::Vec3b>(i, j) = cv::Vec3b(255, 255, 255);
+                        img.at<cv::Vec3b>(j, i) = cv::Vec3b(255,255,255);
+                    else
+                        // img.at<cv::Vec3b>(i, j) = cv::Vec3b(60, 60, 60);
+                        img.at<cv::Vec3b>(j, i) = cv::Vec3b(60, 60, 60);
+                }
             }
         }
-        GMapping::Point robot(bestP.pose.y, bestP.pose.x);
-        GMapping::IntPoint irobot = bestP.map.world2map(robot);
-        cv::circle(img, cv::Point(irobot.x, irobot.y), 5, cv::Scalar::all(255), 1, 4);
+        // GMapping::Point robot(bestP.pose.y, bestP.pose.x);
+        // GMapping::IntPoint irobot = bestP.map.world2map(robot);
+        // cv::circle(img, cv::Point(irobot.x, irobot.y), 5, cv::Scalar::all(255), 1, 4);
         // cv::line(img, cv::Point(irobot.x, irobot.y), 
         //         cv::Point2d(cos(bestP.pose.theta), sin(bestP.pose.theta))*10+cv::Point2d(irobot.x, irobot.y), cv::Scalar::all(255));
         // std::cout << "robot : " <<cv::Point(irobot.x, irobot.y)<< std::endl;
         // std::cout << "arrow : " << cv::Point2d(cos(bestP.pose.theta), sin(bestP.pose.theta))*10+cv::Point2d(irobot.x, irobot.y) << std::endl;
-
+        if (!running)
+            break;
         cv::imshow("img", img);
         cv::waitKey(10);
     }

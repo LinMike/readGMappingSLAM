@@ -13,6 +13,9 @@
 #include "sensor/rangesensor.h"
 #include "sensor/rangereading.h"
 #include "particlefilter/particlefilter.h"
+#include <opencv2/opencv.hpp>
+#include <boost/thread.hpp>
+#include <boost/asio/io_service.hpp>
 
 namespace GMapping {
 
@@ -147,6 +150,12 @@ namespace GMapping {
         typedef std::deque<GridSlamProcessor::TNode*> TNodeDeque;
         typedef std::vector<Particle> ParticleVector;
         ScanMatcher m_matcher;
+
+        // boost::asio::io_service ioservice;
+        // boost::thread_group ths;
+        // boost::asio::io_service::work work;
+
+        // void IoServiceRun() { ioservice.run();};
 
         GridSlamProcessor();
         GridSlamProcessor(std::ostream& infoStr);
@@ -306,38 +315,68 @@ typedef std::multimap<const GridSlamProcessor::TNode*, GridSlamProcessor::TNode*
 inline void GridSlamProcessor::scanMatch( const double *plainReading ) {
 
     double sumScore = 0;
+    boost::thread_group ths;
+    double scores[m_particles.size()] = {0}, ls[m_particles.size()] = {0}, ss[m_particles.size()] = {0};
+    int index = 0;
     for ( ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++ ) {
         OrientedPoint corrected;
-        double score, l, s;
+        // double score, l, s;
         // 给定scan（激光雷达观测数据）和map（地图，作参考帧），利用似然场观测模型，
         // 优化里程计运动模型更新得到的估计位姿，利用该位姿迭代求解得到一个最优位姿
-        score = m_matcher.optimize( corrected, it->map, it->pose, plainReading );
-        std::cout << "score = " << score << std::endl;
+        cv::TickMeter tm;
+        tm.start();
+        /* score */ scores[index++] = m_matcher.optimize( corrected, it->map, it->pose, plainReading );
+        tm.stop();
+        std::cout << "optimize time: " << tm.getTimeMilli() << ", score = " << scores[it-m_particles.begin()] << std::endl;
         // 如果优化成功，则更新该粒子的位姿为optimize()输出的最优估计位姿
-        if ( score>m_minimumScore ) {
+        if ( scores[it-m_particles.begin()]>m_minimumScore ) {
             std::cout << "optimized pose: " << corrected << ", origin pose: " << it->pose << std::endl;
             it->pose = corrected;
         } else {
             // 如果优化失败，则仍使用之前里程计运动模型采样更新得到机器人位姿
             if (m_infoStream) {
-                m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << l <<std::endl;
+                m_infoStream << "Scan Matching Failed, using odometry. Likelihood=" << ls[it-m_particles.begin()] <<std::endl;
                 m_infoStream << "lp:" << m_lastPartPose.x << " "  << m_lastPartPose.y << " "<< m_lastPartPose.theta <<std::endl;
                 m_infoStream << "op:" << m_odoPose.x << " " << m_odoPose.y << " "<< m_odoPose.theta <<std::endl;
             }
         }
+    }
+    ths.join_all();
+    cv::TickMeter tm;
+    tm.start();
+    for ( ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++ ) {
         // 优化粒子的估计位姿之后，重新计算粒子的权重值
         // 相当于粒子滤波器中的观测步骤，计算p(z|x,m)，粒子的权重由粒子的似然来表示
-        m_matcher.likelihoodAndScore( s, l, it->map, it->pose, plainReading );
-        sumScore += score;
+        cv::TickMeter tm;
+        // tm.reset();
+        tm.start();
+        m_matcher.likelihoodAndScore( ss[it-m_particles.begin()], ls[it-m_particles.begin()], it->map, it->pose, plainReading );
+        tm.stop();
+        std::cout << "likelihoodAndScore time : " << tm.getTimeMilli() << std::endl;
+        sumScore += scores[it-m_particles.begin()]/* score */;
         // 一个粒子的权重并不是当前时刻的最优位姿对应的似然值来表示，而是所有时刻的似然值之和来表示
-        it->weight += l;
-        it->weightSum += l;
+        it->weight += ls[it-m_particles.begin()];
+        it->weightSum += ls[it-m_particles.begin()];
         // 计算出来最优的位姿之后，进行地图的扩充  这里不会进行内存分配
         // 不进行内存分配的原因是这些粒子进行重采样之后有可能会消失掉，因此在后面进行冲采样的时候统一进行内存分配。
         // 理论上来说，这里的操作是没有必要的，因为后面的重采样的时候还会进行一遍
+        tm.reset();
+        tm.start();
         m_matcher.invalidateActiveArea();
-        m_matcher.computeActiveArea(it->map, it->pose, plainReading);
+        tm.stop();
+        std::cout << "invalidateActiveArea time: " << tm.getTimeMilli() << std::endl;
+        tm.reset();
+        tm.start();
+        ths.create_thread(boost::bind(&ScanMatcher::computeActiveArea, &m_matcher, 
+                                        boost::ref(it->map), boost::cref(it->pose), plainReading));
+        // m_matcher.computeActiveArea(it->map, it->pose, plainReading);
+        tm.stop();
+        std::cout << "computeActiveArea time : " << tm.getTimeMilli() << std::endl;
+
     }
+    ths.join_all();
+    tm.stop();
+    std::cout << "_______multithread computeActiveArea: " << tm.getTimeMilli() << std::endl;
     if (m_infoStream)
         m_infoStream << "Average Scan Matching Score=" << sumScore/m_particles.size() << std::endl;
 }
@@ -385,7 +424,8 @@ inline void GridSlamProcessor::normalize() {
  * 否则不需要重采样，则所有的粒子的轨迹都加上一个新的节点，然后进行地图的更新
  */
 inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSize, const RangeReading* reading) {
-
+cv::TickMeter tm;
+tm.start();
     bool hasResampled = false;
     // 备份旧的粒子对应的轨迹树，即保留树的叶子节点，在增加新节点的时候使用
     TNodeVector oldGeneration;
@@ -440,18 +480,31 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
         }
         // 清楚全部的粒子 然后从temp中读取保留下来的粒子
         m_particles.clear();
+        cv::TickMeter tm2;
+        tm2.start();
+        boost::thread_group ths;
         for (ParticleVector::iterator it=temp.begin(); it!=temp.end(); it++) {
             it->setWeight(0); // 重采样后，每个粒子的权重都设置为相同的值，这里为0
             // 增加了一帧激光数据 因此需要更新地图
             m_matcher.invalidateActiveArea();
-            m_matcher.registerScan(it->map, it->pose, plainReading);
+            // m_matcher.registerScan(it->map, it->pose, plainReading);
+            ths.create_thread(boost::bind(&ScanMatcher::registerScan, &m_matcher, 
+                                        boost::ref(it->map), boost::cref(it->pose), plainReading));
+            // m_particles.push_back(*it);
+        }
+        ths.join_all();
+        for (ParticleVector::iterator it=temp.begin(); it!=temp.end(); it++) 
+        {
             m_particles.push_back(*it);
         }
+        tm2.stop();
+        std::cout << "registerScan use time: " << tm2.getTimeMilli() << ", sample size: " << temp.size() << std::endl;
         hasResampled = true;
     } else {
         // 否则不需要重采样，权值不变。只为轨迹创建一个新的节点
         int index = 0;
         TNodeVector::iterator node_it = oldGeneration.begin();
+        boost::thread_group ths;
         for ( ParticleVector::iterator it=m_particles.begin(); it!=m_particles.end(); it++ ) {
             //create a new node in the particle tree and add it to the old tree
             //BEGIN: BUILDING TREE  
@@ -461,13 +514,18 @@ inline bool GridSlamProcessor::resample(const double* plainReading, int adaptSiz
             it->node = node;
             //END: BUILDING TREE
             m_matcher.invalidateActiveArea();
-            m_matcher.registerScan(it->map, it->pose, plainReading);
+            // m_matcher.registerScan(it->map, it->pose, plainReading);
+            ths.create_thread(boost::bind(&ScanMatcher::registerScan, &m_matcher, 
+                                        boost::ref(it->map), boost::cref(it->pose), plainReading));
             it->previousIndex = index;
             index++;
             node_it++;
         }
+        ths.join_all();
         std::cerr  << "Done" <<std::endl;
     }
+tm.stop();
+std::cout << "resample use time : " << tm.getTimeMilli() << std::endl;
     //END: BUILDING TREE
     return hasResampled;
 }

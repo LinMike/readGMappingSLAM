@@ -1,6 +1,9 @@
 #include <string.h>
 #include "scanmatcher/gridlinetraversal.h"
 #include "scanmatcher/scanmatcher.h"
+#include <boost/thread/thread.hpp>
+#include <boost/thread/future.hpp>
+#include <opencv2/opencv.hpp>
 
 namespace GMapping {
 
@@ -106,94 +109,191 @@ namespace GMapping {
      * init，当前时刻估计位姿（当前帧）
      * readings，激光雷达观测数据
      */
-    double ScanMatcher::optimize( OrientedPoint& pnew, const ScanMatcherMap& map, const OrientedPoint& init, const double* readings ) const {
+    double ScanMatcher::optimize(OrientedPoint& pnew, const ScanMatcherMap &map, const OrientedPoint &init, const double *readings) const
+    {
         double bestScore = -1;
         OrientedPoint currentPose = init;
-        // 利用激光雷达似然场观测模型进行扫描匹配，优化当前位姿
-        // 即计算出一个初始的优化位姿（不一定是最优的）并返回对应的得分值
         double currentScore = score(map, currentPose, readings);
-
-        // 每次迭代的角度增量，和线性位移增量
-        double adelta = m_optAngularDelta, ldelta =m_optLinearDelta;
-        // 无效迭代（这一次迭代算出来的得分比上一次要差）的次数
+        double adelta = 0.1, ldelta = 0.1;
         unsigned int refinement = 0;
-        // 搜索的方向，前，后，左，右，左转，右转
-        enum Move { Front, Back, Left, Right, TurnLeft, TurnRight, Done };
-        // 搜索次数（每个方向算一次，一次不论有效，或无效）
-        int c_iterations = 0;
+        // enum Move { Front, Back, Left, Right, Done};
+        // int c_iterations = 0;
+        
+        // boost::thread_group ths;
+        // boost::promise<double> promise;
+        // promise.get_future() = boost::async(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(currentPose), readings));
+        
         do {
-            // 如果这一次(currentScore)算出来比上一次(bestScore)差
-            // 则有可能是走太多了，要减少搜索步长（减半）
-            if ( bestScore >= currentScore ) {
-                refinement++;
+            if (bestScore >= currentScore)
+            {
+                refinement ++;
                 adelta *= .5;
                 ldelta *= .5;
+                if (adelta < 0.05 || ldelta < 0.05) break;
             }
             bestScore = currentScore;
             OrientedPoint bestLocalPose = currentPose;
-            OrientedPoint localPose = currentPose;
-            // 将这6个方向都搜索一次，得到这6个方向中最好的一个位姿及其对应得分
-            Move move = Front;
-            do {
-                localPose = currentPose;
-                switch ( move ) {
-                    case Front:
-                        localPose.x += ldelta;
-                        move = Back;
-                        break;
-                    case Back:
-                        localPose.x -= ldelta;
-                        move = Left;
-                        break;
-                    case Left:
-                        localPose.y -= ldelta;
-                        move = Right;
-                        break;
-                    case Right:
-                        localPose.y += ldelta;
-                        move = TurnLeft;
-                        break;
-                    case TurnLeft:
-                        localPose.theta += adelta;
-                        move = TurnRight;
-                        break;
-                    case TurnRight:
-                        localPose.theta -= adelta;
-                        move = Done;
-                        break;
-                    default:;
-                }
-                // 计算当前方向的位姿（角度，线性位移）和原始估计位姿（init）的区别，区别越大增益越小
-                // 若里程计比较可靠的话，则进行匹配时就需要对离原始估计位姿（init）比较远的位姿施加惩罚
-                double odo_gain = 1;
-                if ( m_angularOdometryReliability > 0. ) {
-                    double dth=init.theta-localPose.theta; 	dth=atan2(sin(dth), cos(dth)); 	dth*=dth;
-                    odo_gain*=exp(-m_angularOdometryReliability*dth);                    
-                }
-                if ( m_linearOdometryReliability > 0. ) {
-                    double dx=init.x-localPose.x;
-                    double dy=init.y-localPose.y;
-                    double drho=dx*dx+dy*dy;
-                    odo_gain*=exp(-m_linearOdometryReliability*drho);                    
-                }
-                // 计算当前方向的位姿对应的得分
-                double localScore = odo_gain*score( map, localPose, readings );
-                // 若得分更好，则更新
-                if ( localScore > currentScore ) {
-                    currentScore = localScore;
-                    bestLocalPose = localPose;
-                }
-                c_iterations++;
-            } while( move != Done );
-            // 把当前6个方向中最好的位姿设置为最优位姿，若都6个方向无效的话，这个值不会被更新
+            // OrientedPoint localPose = currentPose;
+            OrientedPoint Front(ldelta, 0, 0), Back(-ldelta, 0, 0), Left(0, ldelta, 0), Right(0, -ldelta, 0);
+            Front = currentPose + Front;
+            Back = currentPose + Back;
+            Left = currentPose + Left;
+            Right = currentPose + Right;
+            cv::TickMeter tm;
+            tm.start();
+            // FIXME: 使用4个线程并行计算当前位置currentPose在前后左右4个方向邻域的匹配度score
+            boost::packaged_task<double> pt1(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Front), readings));
+            boost::packaged_task<double> pt2(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Back), readings));
+            boost::packaged_task<double> pt3(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Left), readings));
+            boost::packaged_task<double> pt4(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Right), readings));
+
+            boost::unique_future<double> f1 = pt1.get_future();
+            boost::unique_future<double> f2 = pt2.get_future();
+            boost::unique_future<double> f3 = pt3.get_future();
+            boost::unique_future<double> f4 = pt4.get_future();
+            tm.stop();
+            std::cout << "========Construct Packaged Task time : " << tm.getTimeMilli() << std::endl;
+            tm.reset();
+            tm.start();
+            boost::thread th1(boost::move(pt1));
+            boost::thread th2(boost::move(pt2));
+            boost::thread th3(boost::move(pt3));
+            boost::thread th4(boost::move(pt4));
+            tm.stop();
+            std::cout << "=========Running Thread time: " << tm.getTimeMilli() << std::endl;
+            // boost::unique_future<double> future1 = boost::move(boost::async(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Front), readings)));
+            // boost::unique_future<double> future2 = boost::async(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Back), readings));
+            // boost::unique_future<double> future3 = boost::async(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Left), readings));
+            // boost::unique_future<double> future4 = boost::async(boost::bind(&ScanMatcher::score, this, boost::cref(map), boost::cref(Right), readings));
+            tm.reset();
+            tm.start();
+            double score_front = f1.get();
+            if (score_front > currentScore)
+            {
+                currentScore = score_front;
+                bestLocalPose = Front;
+            }
+            double score_back = f2.get();
+            if (score_back > currentScore)
+            {
+                currentScore = score_back;
+                bestLocalPose = Back;
+            }
+            double score_left = f3.get();
+            if (score_left > currentScore)
+            {
+                currentScore = score_left;
+                bestLocalPose = Left;
+            }
+            double score_right = f4.get();
+            if (score_right > currentScore)
+            {
+                currentScore = score_right;
+                bestLocalPose = Right;
+            }
             currentPose = bestLocalPose;
-        // 这一次迭代得分更好，继续下一次迭代；
-        // 或这一次迭代更差（无效迭代），修改角度和线性位移增量，继续下一次迭代，直至超出无效迭代次数的最大值
-        } while ( currentScore > bestScore || refinement < m_optRecursiveIterations );
-        // 返回最优位姿及其对应得分
+            tm.stop();
+            std::cout << "========Get future data time : " << tm.getTimeMilli() << std::endl;
+        } while ( currentScore > bestScore || refinement < m_optRecursiveIterations);
         pnew = currentPose;
+
         return bestScore;
     }
+    // double ScanMatcher::optimize( OrientedPoint& pnew, const ScanMatcherMap& map, const OrientedPoint& init, const double* readings ) const {
+    //     double bestScore = -1;
+    //     OrientedPoint currentPose = init;
+    //     // 利用激光雷达似然场观测模型进行扫描匹配，优化当前位姿
+    //     // 即计算出一个初始的优化位姿（不一定是最优的）并返回对应的得分值
+    //     double currentScore = score(map, currentPose, readings);
+
+    //     // 每次迭代的角度增量，和线性位移增量
+    //     double adelta = /* m_optAngularDelta */0.1, ldelta =/* m_optLinearDelta */0.1;
+    //     std::cout << "adelta = " << adelta << ", ldelta = " << ldelta << std::endl;
+    //     // 无效迭代（这一次迭代算出来的得分比上一次要差）的次数
+    //     unsigned int refinement = 0;
+    //     // 搜索的方向，前，后，左，右，左转，右转
+    //     enum Move { Front, Back, Left, Right/* , TurnLeft, TurnRight */, Done };
+    //     // 搜索次数（每个方向算一次，一次不论有效，或无效）
+    //     int c_iterations = 0;
+    //     do {
+    //         // 如果这一次(currentScore)算出来比上一次(bestScore)差
+    //         // 则有可能是走太多了，要减少搜索步长（减半）
+    //         if ( bestScore >= currentScore ) {
+    //             refinement++;
+    //             adelta *= .5;
+    //             ldelta *= .5;
+    //             if (adelta < 0.05 || ldelta < 0.05) break;
+    //         }
+    //         bestScore = currentScore;
+    //         OrientedPoint bestLocalPose = currentPose;
+    //         OrientedPoint localPose = currentPose;
+    //         // 将这6个方向都搜索一次，得到这6个方向中最好的一个位姿及其对应得分
+    //         Move move = Front;
+    //         do {
+    //             localPose = currentPose;
+    //             switch ( move ) {
+    //                 case Front:
+    //                     localPose.x += ldelta;
+    //                     move = Back;
+    //                     break;
+    //                 case Back:
+    //                     localPose.x -= ldelta;
+    //                     move = Left;
+    //                     break;
+    //                 case Left:
+    //                     // localPose.y -= ldelta;
+    //                     localPose.y += ldelta;
+    //                     move = Right;
+    //                     break;
+    //                 case Right:
+    //                     // localPose.y += ldelta;
+    //                     localPose.y -= ldelta;
+    //                     move = Done;
+    //                     // move = TurnLeft;
+    //                     break;
+    //                 // case TurnLeft:
+    //                 //     localPose.theta += adelta;
+    //                 //     move = TurnRight;
+    //                 //     break;
+    //                 // case TurnRight:
+    //                 //     localPose.theta -= adelta;
+    //                 //     move = Done;
+    //                 //     break;
+    //                 default:;
+    //             }
+    //             std::cout << "===> localPose: " << localPose << ", currentPose: " << currentPose << ", mvoe: " << move << ", ldelta: " << ldelta << std::endl;
+    //             // 计算当前方向的位姿（角度，线性位移）和原始估计位姿（init）的区别，区别越大增益越小
+    //             // 若里程计比较可靠的话，则进行匹配时就需要对离原始估计位姿（init）比较远的位姿施加惩罚
+    //             double odo_gain = 1;
+    //             if ( m_angularOdometryReliability > 0. ) {
+    //                 double dth=init.theta-localPose.theta; 	dth=atan2(sin(dth), cos(dth)); 	dth*=dth;
+    //                 odo_gain*=exp(-m_angularOdometryReliability*dth);                    
+    //             }
+    //             if ( m_linearOdometryReliability > 0. ) {
+    //                 double dx=init.x-localPose.x;
+    //                 double dy=init.y-localPose.y;
+    //                 double drho=dx*dx+dy*dy;
+    //                 odo_gain*=exp(-m_linearOdometryReliability*drho);                    
+    //             }
+    //             // 计算当前方向的位姿对应的得分
+    //             double localScore = odo_gain*score( map, localPose, readings );
+    //             // 若得分更好，则更新
+    //             if ( localScore > currentScore ) {
+    //                 currentScore = localScore;
+    //                 bestLocalPose = localPose;
+    //             }
+    //             c_iterations++;
+    //         } while( move != Done );
+    //         // 把当前6个方向中最好的位姿设置为最优位姿，若都6个方向无效的话，这个值不会被更新
+    //         currentPose = bestLocalPose;
+    //     // 这一次迭代得分更好，继续下一次迭代；
+    //     // 或这一次迭代更差（无效迭代），修改角度和线性位移增量，继续下一次迭代，直至超出无效迭代次数的最大值
+    //     } while ( currentScore > bestScore || refinement < m_optRecursiveIterations );
+    //     // 返回最优位姿及其对应得分
+    //     pnew = currentPose;
+    //     std::cout << "c_iterations = " << c_iterations << std::endl;
+    //     return bestScore;
+    // }
 
     /**
      * 根据雷达数据计算map中被点云数据覆盖的区域，表示这些区域时激活区域，更新cell击中或空闲状态
@@ -312,9 +412,14 @@ namespace GMapping {
      */ 
     double ScanMatcher::registerScan(ScanMatcherMap& map, const OrientedPoint& p, const double* readings)
     {
+        cv::TickMeter tm;
+        tm.start();
         if (!m_activeAreaComputed)
             computeActiveArea(map, p, readings);
-            
+        tm.stop();
+        std::cout << "=== registerScan computeActiveArea use time : " << tm.getTimeMilli() << std::endl;
+        tm.reset();
+        tm.start();
         //this operation replicates the cells that will be changed in the registration operation
         map.storage().allocActiveArea();
         
@@ -327,7 +432,8 @@ namespace GMapping {
         
         const double * angle=m_laserAngles+m_initialBeamSkip;
         double esum=0;
-        for (const double* r=readings+m_initialBeamSkip; r<readings+m_laserBeams; r++, angle++)
+        int cnt = 0;
+        for (const double* r=readings+m_initialBeamSkip; r<readings+m_laserBeams; r++, angle++, cnt++)
             if (m_generateMap){//第一帧数据时还不会生成map，使用雷达数据的击中点累加到cell的acc中
                 double d=*r;    // m_generateMap为ture，则对激光束的空闲区域也分配空间并更新
                 if (d>m_laserMaxRange||d==0.0||isnan(d))
@@ -339,6 +445,8 @@ namespace GMapping {
                 //IntPoint linePoints[20000] ;
                 GridLineTraversalLine line;
                 line.points=m_linePoints;
+                cv::TickMeter tm;
+                tm.start();
                 GridLineTraversal::gridLine(p0, p1, &line); //激光束从机器到击中点的直线
                 for (int i=0; i<line.num_points-1; i++){    //除去击中点外线上的其他位置时空闲区域
                     PointAccumulator& cell=map.cell(line.points[i]);
@@ -347,6 +455,8 @@ namespace GMapping {
                     e+=cell.entropy();
                     esum+=e;
                 }
+                tm.stop();
+                // std::cout << "==================one laser point register use time: " << tm.getTimeMilli() << std::endl;
                 if (d<m_usableRange){   //如果击中点超出雷达检测范围(可能是错误数据)，则只用空闲区域，否则将击中点也加到map中
                     double e=-map.cell(p1).entropy();
                     map.cell(p1).update(true, phit);
@@ -364,6 +474,8 @@ namespace GMapping {
                                                 //累加击中的世界坐标点(accx += x, accy += y),击中的中心即为(accx/n, accy/n)
             }
         //cout  << "informationGain=" << -esum << endl;
+        tm.stop();
+        std::cout << "---------------CNT = " << cnt << ", register end time : " << tm.getTimeMilli() << std::endl;
         return esum;
     }
 

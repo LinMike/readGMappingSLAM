@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0.0)
 project(gmapping VERSION 0.1.0)
 
 # # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g3 -O0 -Wall")
-add_compile_options(-g3 -O0 -Wall)
+add_compile_options(-g3 -O0 -Wall -std=c++11)
 
 # # set(PROJECT_BINARY_DIR ${PROJECT_BINARY_DIR}/build)
 # link_libraries(opencv_core opencv_imgproc opencv_highgui)
@@ -22,6 +22,15 @@ set(OpenCV_DIR /usr/local/share/OpenCV/)
 # set(CUDA_USE_SHARED_CUDA_RUNTIME OFF)
 find_package(OpenCV REQUIRED)
 message(STATUS "opencv libs: ${OpenCV_LIBS}")
+
+
+# set(Boost_DIR /usr/share/cmake-3.5/Modules/)
+#set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} /usr/local/)
+#find_package(Boost 1.67 EXACT REQUIRED thread system filesystem)
+find_package(Boost REQUIRED thread system filesystem)
+message(STATUS "boost libs: ${Boost_LIBRARIES}")
+message(STATUS "boost libs: ${Boost_LIBRARY_DIRS}")
+message(STATUS "boost libs: ${Boost_C_LIBRARY}")
 
 # link_directories(/usr/local/cuda/targets/x86_64-linux/lib/)
 
@@ -50,6 +59,7 @@ aux_source_directory(src/sensor SENSORSOURCES)
 aux_source_directory(src/utils UTILSOURCES)
 
 link_libraries(${OpenCV_LIBS})
+link_libraries(${Boost_LIBRARIES})
 list(APPEND SOURCES ${GRIDSOURCES} ${MODELSOURCES} ${MATCHERSOURCES} ${SENSORSOURCES} ${UTILSOURCES})
 message(STATUS "source files: ${SOURCES}")
 add_executable(gmapping ${SOURCES})

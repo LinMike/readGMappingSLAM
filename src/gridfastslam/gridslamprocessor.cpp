@@ -9,6 +9,8 @@
 #include "gridfastslam/gridslamprocessor.h"
 #include "utils/point.h"
 
+#include <opencv2/opencv.hpp>
+
 namespace GMapping
 {
 
@@ -20,28 +22,41 @@ using namespace std;
 /**
      * 构造函数
      */
-GridSlamProcessor::GridSlamProcessor() : m_infoStream(cout)
+GridSlamProcessor::GridSlamProcessor() : m_infoStream(cout)//, work(ioservice)
 {
     period_ = 5.0;
     m_obsSigmaGain = 1;
     m_resampleThreshold = 0.5;
     m_minimumScore = 0.;
+    // for (int i = 0; i < 4; i++)
+    // {
+    //     ths.create_thread(boost::bind(&GridSlamProcessor::IoServiceRun, this));
+    // }
 }
 
-GridSlamProcessor::GridSlamProcessor(ostream &infoS) : m_infoStream(infoS)
+GridSlamProcessor::GridSlamProcessor(ostream &infoS) : m_infoStream(infoS)//, work(ioservice)
 {
     period_ = 5.0;
     m_obsSigmaGain = 1;
     m_resampleThreshold = 0.5;
     m_minimumScore = 0.;
+    // for (int i = 0; i < 4; i++)
+    // {
+    //     ths.create_thread(boost::bind(&GridSlamProcessor::IoServiceRun, this));
+    // }
 }
 
 /**
      * 拷贝构造函数
      * gsp，被拷贝的GridSlamProcessor类对象
      */
-GridSlamProcessor::GridSlamProcessor(const GridSlamProcessor &gsp) : m_infoStream(gsp.m_infoStream)
+GridSlamProcessor::GridSlamProcessor(const GridSlamProcessor &gsp) : m_infoStream(gsp.m_infoStream)//, work(ioservice)
 {
+    // for (int i = 0; i < 4; i++)
+    // {
+    //     ths.create_thread(boost::bind(&GridSlamProcessor::IoServiceRun, this));
+    // }
+
     period_ = 5.0;
 
     m_obsSigmaGain = gsp.m_obsSigmaGain;
@@ -168,6 +183,7 @@ GridSlamProcessor *GridSlamProcessor::clone() const
      */
 GridSlamProcessor::~GridSlamProcessor()
 {
+    // work.get_io_service().stop();
     cerr << __PRETTY_FUNCTION__ << ": Start" << endl;
     cerr << __PRETTY_FUNCTION__ << ": Deleting tree" << endl;
     for (std::vector<Particle>::iterator it = m_particles.begin(); it != m_particles.end(); it++)
@@ -346,6 +362,8 @@ void GridSlamProcessor::processTruePos(const OdometryReading &odometry)
 	 */
 bool GridSlamProcessor::processScan(const RangeReading &reading, int adaptParticles)
 {
+    cv::TickMeter tm;
+    tm.start();
     /**retireve the position from the reading, and compute the odometry*/
     // 获取当前时刻里程计下机器人的位姿
     OrientedPoint relPose = reading.getPose();
@@ -391,7 +409,8 @@ bool GridSlamProcessor::processScan(const RangeReading &reading, int adaptPartic
         cerr << "** crap or can lead to a core dump since the map doesn't fit.... C&G **" << endl;
         cerr << "***********************************************************************" << endl;
     }
-
+tm.stop();
+std::cout << "processScan before time: " << tm.getTimeMilli() << std::endl;
     // 更新一帧激光雷达数据
     m_odoPose = relPose; // 当前时刻的里程计下机器人位姿 更新为 前一时刻的位姿
     bool processed = false;
@@ -417,30 +436,45 @@ bool GridSlamProcessor::processScan(const RangeReading &reading, int adaptPartic
         // 如果不是第一帧数据
         if (m_count > 0)
         {
-
+            cv::TickMeter tm;
+            tm.start();
             // 扫描匹配，利用最近的一次观测来提高proposal分布
             // 利用proposal分布和激光雷达数据来确定各个粒子的权重
             scanMatch(plainReading);
+            tm.stop();
+            std::cout << "==========scanMatch============: " << tm.getTimeMilli() << std::endl;
+            tm.reset();
+            tm.start();
             onScanmatchUpdate();
             // 更新各个粒子对应的轨迹树上的累计权重
             // （调用了normalize()函数进行权重归一化处理，同时计算出有效粒子数neff值）
             updateTreeWeights(false);
+            tm.stop();
+            std::cout << "===========updateTreeWeights====: " << tm.getTimeMilli() << std::endl;
+            tm.reset();
+            tm.start();
             // 对最终的proposal对应的粒子群进行（自适应）重采样
             // 根据neff的大小来进行重采样  不但进行了重采样，也对地图进行更新
             resample(plainReading, adaptParticles, reading_copy);
+            tm.stop();
+            std::cout << "ScanMatch->updateTreeWeights->resample use time : " << tm.getTimeMilli() << std::endl;
         }
         else
         {
             // 如果是第一帧数据，则可以直接计算activeArea。因为这个时候，对机器人的位置是非常确定的，就是(0,0,0)。
+            boost::thread_group ths;
             for (ParticleVector::iterator it = m_particles.begin(); it != m_particles.end(); it++)
             {
                 m_matcher.invalidateActiveArea();
                 m_matcher.computeActiveArea(it->map, it->pose, plainReading);
-                m_matcher.registerScan(it->map, it->pose, plainReading);
+                // m_matcher.registerScan(it->map, it->pose, plainReading);
+                ths.create_thread(boost::bind(&ScanMatcher::computeActiveArea, &m_matcher, 
+                                                boost::ref(it->map), boost::cref(it->pose), plainReading));
                 TNode *node = new TNode(it->pose, 0., it->node, 0);
                 node->reading = reading_copy;
                 it->node = node;    //node保存这个粒子的轨迹树，雷达数据，权重等信息
             }
+            ths.join_all();
         }
         // 进行重采样之后，粒子的权重又会发生变化，因此需要再次更新粒子轨迹的累计权重
         // （调用了normalize()函数进行权重归一化处理，同时计算出有效粒子数neff值）
